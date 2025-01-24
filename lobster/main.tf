@@ -48,12 +48,12 @@ resource "aiven_project_vpc" "vpc-primary" {
   }
 }
 
-resource "aiven_kafka" "kafka-primary" {
+resource "aiven_kafka" "lobster-kafka-primary" {
   project                 = local.project_name
   cloud_name              = local.cloud
   project_vpc_id          = aiven_project_vpc.vpc-primary.id
   plan                    = "startup-2"
-  service_name            = "kafka-primary"
+  service_name            = "lobster-kafka-primary"
   maintenance_window_dow  = "monday"
   maintenance_window_time = "10:00:00"
 
@@ -80,18 +80,18 @@ resource "aiven_kafka" "kafka-primary" {
   }
 }
 
-resource "aiven_service_integration" "thanos-kafka-primary" {
+resource "aiven_service_integration" "thanos-lobster-kafka-primary" {
   project                     = local.project_name
   integration_type            = "metrics"
-  source_service_name         = aiven_kafka.kafka-primary.service_name
+  source_service_name         = aiven_kafka.lobster-kafka-primary.service_name
   destination_service_project = "devops-meetup-infra"
   destination_service_name    = "thanos"
 }
 
-resource "aiven_service_integration" "opensearch-kafka-primary" {
+resource "aiven_service_integration" "opensearch-lobster-kafka-primary" {
   project                     = local.project_name
   integration_type            = "logs"
-  source_service_name         = aiven_kafka.kafka-primary.service_name
+  source_service_name         = aiven_kafka.lobster-kafka-primary.service_name
   destination_service_project = "devops-meetup-infra"
   destination_service_name    = "opensearch"
 }

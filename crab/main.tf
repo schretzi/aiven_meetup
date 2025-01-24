@@ -18,6 +18,11 @@ terraform {
       version = ">= 4.0.0, < 5.0.0"
     }
   }
+
+  backend "gcs" {
+    bucket = "devops-meetup-tf-state"
+    prefix = "terraform/state/crab"
+  }
 }
 
 resource "aiven_project" "crab" {
@@ -63,13 +68,13 @@ resource "aiven_project_vpc" "vpc-backup" {
   }
 }
 
-resource "aiven_kafka" "kafka-primary" {
+resource "aiven_kafka" "crab-kafka-primary" {
 
   project                 = local.project_name
   cloud_name              = local.cloud
   project_vpc_id          = aiven_project_vpc.vpc-primary.id
   plan                    = "startup-2"
-  service_name            = "kafka-primary"
+  service_name            = "crab-kafka-primary"
   maintenance_window_dow  = "monday"
   maintenance_window_time = "10:00:00"
 
@@ -96,17 +101,17 @@ resource "aiven_kafka" "kafka-primary" {
   }
 }
 
-resource "aiven_kafka" "kafka-backup" {
+resource "aiven_kafka" "crab-kafka-backup" {
   project                 = local.project_name
   cloud_name              = local.cloud_backup
   project_vpc_id          = aiven_project_vpc.vpc-backup.id
   plan                    = "startup-2"
-  service_name            = "kafka-backup"
+  service_name            = "crab-kafka-backup"
   maintenance_window_dow  = "friday"
   maintenance_window_time = "10:00:00"
 
   kafka_user_config {
-    kafka_rest      = false
+    kafka_rest      = true
     kafka_connect   = false
     schema_registry = false
     kafka_version   = "3.8"
@@ -128,10 +133,11 @@ resource "aiven_kafka" "kafka-backup" {
   }
 }
 
-resource "aiven_kafka_mirrormaker" "backup" {
+resource "aiven_kafka_mirrormaker" "mm2" {
+  depends_on     = [aiven_kafka.crab-kafka-primary, aiven_kafka.crab-kafka-backup]
   project        = local.project_name
   cloud_name     = local.cloud
-  service_name   = "kafka-mm2-backup"
+  service_name   = "kafka-mm2"
   plan           = "startup-4"
   project_vpc_id = aiven_project_vpc.vpc-primary.id
 
@@ -147,18 +153,18 @@ resource "aiven_kafka_mirrormaker" "backup" {
   }
 }
 
-resource "aiven_service_integration" "thanos-kafka-primary" {
+resource "aiven_service_integration" "thanos-crab-kafka-primary" {
   project                     = local.project_name
   integration_type            = "metrics"
-  source_service_name         = aiven_kafka.kafka-primary.service_name
+  source_service_name         = aiven_kafka.crab-kafka-primary.service_name
   destination_service_project = "devops-meetup-infra"
   destination_service_name    = "thanos"
 }
 
-resource "aiven_service_integration" "thanos-kafka-backup" {
+resource "aiven_service_integration" "thanos-crab-kafka-backup" {
   project                     = local.project_name
   integration_type            = "metrics"
-  source_service_name         = aiven_kafka.kafka-backup.service_name
+  source_service_name         = aiven_kafka.crab-kafka-backup.service_name
   destination_service_project = "devops-meetup-infra"
   destination_service_name    = "thanos"
 }
@@ -166,23 +172,23 @@ resource "aiven_service_integration" "thanos-kafka-backup" {
 resource "aiven_service_integration" "thanos-kafka-mm2" {
   project                     = local.project_name
   integration_type            = "metrics"
-  source_service_name         = aiven_kafka_mirrormaker.backup.service_name
+  source_service_name         = aiven_kafka_mirrormaker.mm2.service_name
   destination_service_project = "devops-meetup-infra"
   destination_service_name    = "thanos"
 }
 
-resource "aiven_service_integration" "opensearch-kafka-primary" {
+resource "aiven_service_integration" "opensearch-crab-kafka-primary" {
   project                     = local.project_name
   integration_type            = "logs"
-  source_service_name         = aiven_kafka.kafka-primary.service_name
+  source_service_name         = aiven_kafka.crab-kafka-primary.service_name
   destination_service_project = "devops-meetup-infra"
   destination_service_name    = "opensearch"
 }
 
-resource "aiven_service_integration" "opensearch-kafka-backup" {
+resource "aiven_service_integration" "opensearch-crab-kafka-backup" {
   project                     = local.project_name
   integration_type            = "logs"
-  source_service_name         = aiven_kafka.kafka-backup.service_name
+  source_service_name         = aiven_kafka.crab-kafka-backup.service_name
   destination_service_project = "devops-meetup-infra"
   destination_service_name    = "opensearch"
 }
@@ -190,8 +196,54 @@ resource "aiven_service_integration" "opensearch-kafka-backup" {
 resource "aiven_service_integration" "opensearch-kafka-mm2" {
   project                     = local.project_name
   integration_type            = "logs"
-  source_service_name         = aiven_kafka_mirrormaker.backup.service_name
+  source_service_name         = aiven_kafka_mirrormaker.mm2.service_name
   destination_service_project = "devops-meetup-infra"
   destination_service_name    = "opensearch"
+}
+
+resource "aiven_mirrormaker_replication_flow" "backup" {
+  project                     = local.project_name
+  service_name                = aiven_kafka_mirrormaker.mm2.service_name
+  source_cluster              = aiven_kafka.crab-kafka-primary.service_name
+  target_cluster              = aiven_kafka.crab-kafka-backup.service_name
+  enable                      = true
+  replication_policy_class    = "org.apache.kafka.connect.mirror.IdentityReplicationPolicy"
+  emit_heartbeats_enabled     = true
+  sync_group_offsets_enabled  = true
+  offset_syncs_topic_location = "source"
+
+  topics = [
+    ".*",
+  ]
+
+  topics_blacklist = [
+    "kafka.*internal",
+    "mm2.*internal",
+    ".*\\.replica",
+    "__.*"
+  ]
+}
+
+resource "aiven_mirrormaker_replication_flow" "restore" {
+  project                     = local.project_name
+  service_name                = aiven_kafka_mirrormaker.mm2.service_name
+  source_cluster              = aiven_kafka.crab-kafka-backup.service_name
+  target_cluster              = aiven_kafka.crab-kafka-primary.service_name
+  enable                      = false
+  replication_policy_class    = "org.apache.kafka.connect.mirror.IdentityReplicationPolicy"
+  emit_heartbeats_enabled     = true
+  sync_group_offsets_enabled  = true
+  offset_syncs_topic_location = "source"
+
+  topics = [
+    ".*",
+  ]
+
+  topics_blacklist = [
+    "kafka.*internal",
+    "mm2.*internal",
+    ".*\\.replica",
+    "__.*"
+  ]
 }
 
