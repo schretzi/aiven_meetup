@@ -13,6 +13,11 @@ terraform {
       version = ">= 4.0.0, < 5.0.0"
     }
   }
+
+  backend "gcs" {
+    bucket = "devops-meetup-tf-state"
+    prefix = "terraform/state/infra"
+  }
 }
 
 resource "aiven_project" "infra" {
