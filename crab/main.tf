@@ -2,7 +2,7 @@
 # - rename vpc-to vpc-primary
 
 locals {
-  organization        = "My Organization"
+  organization        = "org507578dda0c"
   project_name        = "devops-meetup-crab"
   cloud               = "google-europe-west4"
   cloud_backup        = "aws-eu-west-3"
@@ -199,6 +199,26 @@ resource "aiven_service_integration" "opensearch-kafka-mm2" {
   source_service_name         = aiven_kafka_mirrormaker.mm2.service_name
   destination_service_project = "devops-meetup-infra"
   destination_service_name    = "opensearch"
+}
+
+resource "aiven_service_integration" "kafka-primary-kafka-mm2" {
+  project                     = local.project_name
+  integration_type            = "kafka_mirrormaker"
+  destination_service_name    = aiven_kafka_mirrormaker.mm2.service_name
+  source_service_name         = aiven_kafka.crab-kafka-primary.service_name
+  kafka_mirrormaker_user_config {
+    cluster_alias = aiven_kafka.crab-kafka-primary.service_name
+  }
+}
+
+resource "aiven_service_integration" "kafka-backup-kafka-mm2" {
+  project                     = local.project_name
+  integration_type            = "kafka_mirrormaker"
+  destination_service_name         = aiven_kafka_mirrormaker.mm2.service_name
+  source_service_name    = aiven_kafka.crab-kafka-backup.service_name
+  kafka_mirrormaker_user_config {
+    cluster_alias = aiven_kafka.crab-kafka-backup.service_name
+  }
 }
 
 resource "aiven_mirrormaker_replication_flow" "backup" {

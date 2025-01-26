@@ -1,5 +1,5 @@
 data "aiven_organization" "self" {
-  name = local.organization
+  id = local.organization
 }
 
 

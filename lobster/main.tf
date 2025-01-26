@@ -2,7 +2,7 @@
 # - rename vpc-to vpc-primary
 
 locals {
-  organization     = "My Organization"
+  organization     = "org507578dda0c"
   project_name     = "devops-meetup-lobster"
   cloud            = "aws-eu-west-3"
   network_cidr     = "10.4.0.0/24"

@@ -1,5 +1,5 @@
 locals {
-  organization     = "My Organization"
+  organization     = "org507578dda0c"
   project_name     = "devops-meetup-infra"
   cloud            = "google-europe-west4"
   network_cidr     = "10.1.0.0/24"
