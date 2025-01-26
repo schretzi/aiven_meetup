@@ -301,7 +301,30 @@ resource "aiven_mirrormaker_replication_flow" "from_onpremise" {
   offset_syncs_topic_location = "source"
 
   topics = [
-    "public.*",
+    "mirror.to.cloud.*",
+  ]
+
+  topics_blacklist = [
+    "kafka.*internal",
+    "mm2.*internal",
+    ".*\\.replica",
+    "__.*"
+  ]
+}
+
+resource "aiven_mirrormaker_replication_flow" "to_onpremise" {
+  project                     = local.project_name
+  service_name                = aiven_kafka_mirrormaker.mm2.service_name
+  source_cluster              = aiven_kafka.crab-kafka-primary.service_name
+  target_cluster              = aiven_service_integration_endpoint.kafka-onpremise.endpoint_name
+  enable                      = true
+  replication_policy_class    = "org.apache.kafka.connect.mirror.IdentityReplicationPolicy"
+  emit_heartbeats_enabled     = true
+  sync_group_offsets_enabled  = false
+  offset_syncs_topic_location = "source"
+
+  topics = [
+    "mirror.to.onpremise.*",
   ]
 
   topics_blacklist = [
