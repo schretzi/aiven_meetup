@@ -131,6 +131,7 @@ resource "aiven_kafka" "crab-kafka-backup" {
 }
 
 resource "aiven_service_integration_endpoint" "kafka-onpremise" {
+  depends_on = [ time_sleep.wait_for_project ]
   project       = local.project_name
   endpoint_name = "kafka-onpremise"
   endpoint_type = "external_kafka"
@@ -144,11 +145,11 @@ resource "aiven_service_integration_endpoint" "kafka-onpremise" {
   }
 }
 
-resource "aiven_kafka_mirrormaker" "mm2" {
+resource "aiven_kafka_mirrormaker" "crab-kafka-mm2" {
   depends_on     = [aiven_kafka.crab-kafka-primary, aiven_kafka.crab-kafka-backup]
   project        = local.project_name
   cloud_name     = local.cloud
-  service_name   = "kafka-mm2"
+  service_name   = "crab-kafka-mm2"
   plan           = "startup-4"
   project_vpc_id = aiven_project_vpc.vpc-primary.id
 
@@ -183,7 +184,7 @@ resource "aiven_service_integration" "thanos-crab-kafka-backup" {
 resource "aiven_service_integration" "thanos-kafka-mm2" {
   project                     = local.project_name
   integration_type            = "metrics"
-  source_service_name         = aiven_kafka_mirrormaker.mm2.service_name
+  source_service_name         = aiven_kafka_mirrormaker.crab-kafka-mm2.service_name
   destination_service_project = "devops-meetup-infra"
   destination_service_name    = "thanos"
 }
@@ -207,7 +208,7 @@ resource "aiven_service_integration" "opensearch-crab-kafka-backup" {
 resource "aiven_service_integration" "opensearch-kafka-mm2" {
   project                     = local.project_name
   integration_type            = "logs"
-  source_service_name         = aiven_kafka_mirrormaker.mm2.service_name
+  source_service_name         = aiven_kafka_mirrormaker.crab-kafka-mm2.service_name
   destination_service_project = "devops-meetup-infra"
   destination_service_name    = "opensearch"
 }
@@ -215,7 +216,7 @@ resource "aiven_service_integration" "opensearch-kafka-mm2" {
 resource "aiven_service_integration" "kafka-primary-kafka-mm2" {
   project                  = local.project_name
   integration_type         = "kafka_mirrormaker"
-  destination_service_name = aiven_kafka_mirrormaker.mm2.service_name
+  destination_service_name = aiven_kafka_mirrormaker.crab-kafka-mm2.service_name
   source_service_name      = aiven_kafka.crab-kafka-primary.service_name
   kafka_mirrormaker_user_config {
     cluster_alias = aiven_kafka.crab-kafka-primary.service_name
@@ -225,7 +226,7 @@ resource "aiven_service_integration" "kafka-primary-kafka-mm2" {
 resource "aiven_service_integration" "kafka-backup-kafka-mm2" {
   project                  = local.project_name
   integration_type         = "kafka_mirrormaker"
-  destination_service_name = aiven_kafka_mirrormaker.mm2.service_name
+  destination_service_name = aiven_kafka_mirrormaker.crab-kafka-mm2.service_name
   source_service_name      = aiven_kafka.crab-kafka-backup.service_name
   kafka_mirrormaker_user_config {
     cluster_alias = aiven_kafka.crab-kafka-backup.service_name
@@ -235,7 +236,7 @@ resource "aiven_service_integration" "kafka-backup-kafka-mm2" {
 resource "aiven_service_integration" "kafka-onpremise-kafka-mm2" {
   project                  = local.project_name
   integration_type         = "kafka_mirrormaker"
-  destination_service_name = aiven_kafka_mirrormaker.mm2.service_name
+  destination_service_name = aiven_kafka_mirrormaker.crab-kafka-mm2.service_name
   source_endpoint_id       = aiven_service_integration_endpoint.kafka-onpremise.id
 
   kafka_mirrormaker_user_config {
@@ -245,7 +246,7 @@ resource "aiven_service_integration" "kafka-onpremise-kafka-mm2" {
 
 resource "aiven_mirrormaker_replication_flow" "backup" {
   project                     = local.project_name
-  service_name                = aiven_kafka_mirrormaker.mm2.service_name
+  service_name                = aiven_kafka_mirrormaker.crab-kafka-mm2.service_name
   source_cluster              = aiven_kafka.crab-kafka-primary.service_name
   target_cluster              = aiven_kafka.crab-kafka-backup.service_name
   enable                      = true
@@ -268,7 +269,7 @@ resource "aiven_mirrormaker_replication_flow" "backup" {
 
 resource "aiven_mirrormaker_replication_flow" "restore" {
   project                     = local.project_name
-  service_name                = aiven_kafka_mirrormaker.mm2.service_name
+  service_name                = aiven_kafka_mirrormaker.crab-kafka-mm2.service_name
   source_cluster              = aiven_kafka.crab-kafka-backup.service_name
   target_cluster              = aiven_kafka.crab-kafka-primary.service_name
   enable                      = false
@@ -291,7 +292,7 @@ resource "aiven_mirrormaker_replication_flow" "restore" {
 
 resource "aiven_mirrormaker_replication_flow" "from_onpremise" {
   project                     = local.project_name
-  service_name                = aiven_kafka_mirrormaker.mm2.service_name
+  service_name                = aiven_kafka_mirrormaker.crab-kafka-mm2.service_name
   source_cluster              = aiven_service_integration_endpoint.kafka-onpremise.endpoint_name
   target_cluster              = aiven_kafka.crab-kafka-primary.service_name
   enable                      = true
@@ -314,7 +315,7 @@ resource "aiven_mirrormaker_replication_flow" "from_onpremise" {
 
 resource "aiven_mirrormaker_replication_flow" "to_onpremise" {
   project                     = local.project_name
-  service_name                = aiven_kafka_mirrormaker.mm2.service_name
+  service_name                = aiven_kafka_mirrormaker.crab-kafka-mm2.service_name
   source_cluster              = aiven_kafka.crab-kafka-primary.service_name
   target_cluster              = aiven_service_integration_endpoint.kafka-onpremise.endpoint_name
   enable                      = true

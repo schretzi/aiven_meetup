@@ -131,6 +131,7 @@ resource "aiven_kafka" "lobster-kafka-backup" {
 }
 
 resource "aiven_service_integration_endpoint" "kafka-onpremise" {
+  depends_on = [ time_sleep.wait_for_project ]
   project       = local.project_name
   endpoint_name = "kafka-onpremise"
   endpoint_type = "external_kafka"
