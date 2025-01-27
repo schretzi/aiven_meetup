@@ -131,17 +131,14 @@ resource "aiven_kafka" "lobster-kafka-backup" {
 }
 
 resource "aiven_service_integration_endpoint" "kafka-onpremise" {
-  depends_on = [ time_sleep.wait_for_project ]
+  depends_on    = [ time_sleep.wait_for_project ]
   project       = local.project_name
   endpoint_name = "kafka-onpremise"
   endpoint_type = "external_kafka"
 
   external_kafka_user_config {
     bootstrap_servers   = "broker-01.kafka.schretzi.cloud:9092"
-    security_protocol   = "SASL_PLAINTEXT"
-    sasl_mechanism      = "PLAIN"
-    sasl_plain_username = "devops"
-    sasl_plain_password = "meetup"
+    security_protocol   = "PLAINTEXT"
   }
 }
 
@@ -246,8 +243,8 @@ resource "aiven_service_integration" "kafka-onpremise-kafka-mm2" {
 resource "aiven_mirrormaker_replication_flow" "backup" {
   project                     = local.project_name
   service_name                = aiven_kafka_mirrormaker.lobster-kafka-mm2.service_name
-  source_cluster              = aiven_kafka.lobster-kafka-primary.service_name
-  target_cluster              = aiven_kafka.lobster-kafka-backup.service_name
+  source_cluster              = aiven_service_integration.kafka-primary-kafka-mm2.kafka_mirrormaker_user_config[0].cluster_alias
+  target_cluster              = aiven_service_integration.kafka-backup-kafka-mm2.kafka_mirrormaker_user_config[0].cluster_alias
   enable                      = true
   replication_policy_class    = "org.apache.kafka.connect.mirror.IdentityReplicationPolicy"
   emit_heartbeats_enabled     = true
@@ -269,8 +266,8 @@ resource "aiven_mirrormaker_replication_flow" "backup" {
 resource "aiven_mirrormaker_replication_flow" "restore" {
   project                     = local.project_name
   service_name                = aiven_kafka_mirrormaker.lobster-kafka-mm2.service_name
-  source_cluster              = aiven_kafka.lobster-kafka-backup.service_name
-  target_cluster              = aiven_kafka.lobster-kafka-primary.service_name
+  source_cluster              = aiven_service_integration.kafka-backup-kafka-mm2.kafka_mirrormaker_user_config[0].cluster_alias
+  target_cluster              = aiven_service_integration.kafka-primary-kafka-mm2.kafka_mirrormaker_user_config[0].cluster_alias
   enable                      = false
   replication_policy_class    = "org.apache.kafka.connect.mirror.IdentityReplicationPolicy"
   emit_heartbeats_enabled     = true
@@ -292,8 +289,8 @@ resource "aiven_mirrormaker_replication_flow" "restore" {
 resource "aiven_mirrormaker_replication_flow" "from_onpremise" {
   project                     = local.project_name
   service_name                = aiven_kafka_mirrormaker.lobster-kafka-mm2.service_name
-  source_cluster              = aiven_service_integration_endpoint.kafka-onpremise.endpoint_name
-  target_cluster              = aiven_kafka.lobster-kafka-primary.service_name
+  source_cluster              = aiven_service_integration.kafka-onpremise-kafka-mm2.kafka_mirrormaker_user_config[0].cluster_alias
+  target_cluster              = aiven_service_integration.kafka-primary-kafka-mm2.kafka_mirrormaker_user_config[0].cluster_alias
   enable                      = true
   replication_policy_class    = "org.apache.kafka.connect.mirror.IdentityReplicationPolicy"
   emit_heartbeats_enabled     = true
@@ -301,30 +298,7 @@ resource "aiven_mirrormaker_replication_flow" "from_onpremise" {
   offset_syncs_topic_location = "source"
 
   topics = [
-    "mirror.to.cloud.*",
-  ]
-
-  topics_blacklist = [
-    "kafka.*internal",
-    "mm2.*internal",
-    ".*\\.replica",
-    "__.*"
-  ]
-}
-
-resource "aiven_mirrormaker_replication_flow" "to_onpremise" {
-  project                     = local.project_name
-  service_name                = aiven_kafka_mirrormaker.lobster-kafka-mm2.service_name
-  source_cluster              = aiven_kafka.lobster-kafka-primary.service_name
-  target_cluster              = aiven_service_integration_endpoint.kafka-onpremise.endpoint_name
-  enable                      = true
-  replication_policy_class    = "org.apache.kafka.connect.mirror.IdentityReplicationPolicy"
-  emit_heartbeats_enabled     = true
-  sync_group_offsets_enabled  = false
-  offset_syncs_topic_location = "source"
-
-  topics = [
-    "mirror.to.onpremise.*",
+    ".*",
   ]
 
   topics_blacklist = [
